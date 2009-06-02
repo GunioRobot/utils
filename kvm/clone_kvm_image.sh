@@ -1,8 +1,5 @@
 #!/bin/sh
 
-from_lv=/dev/mapper/dev01.labo-rescue.dev01.labo
-dest_lv=/dev/mapper/dev01.labo-ganglia.labo
-
 errx ()
 {
     r=$1
@@ -102,7 +99,7 @@ detect_partition_device ()
     if [ -z $lodev ]; then
         errx 1 "loopback device does not specified."
     fi
-    partition=/dev/mapper/`kpartx -l $lodev | head -n 1 | awk '{print $1}'`
+    partition=/dev/mapper/`kpartx -l $lodev | grep loop | head -n 1 | awk '{print $1}'`
     echo $partition
 }
 
@@ -150,6 +147,15 @@ clone_kvm_disk ()
     delete_partition_mappings $dest_lodev
 }
 
+usage ()
+{
+    errx 1 usage: $0 from_lv dest_lv
+}
+
+from_lv=$1
+dest_lv=$2
+
+[ -z "$from_lv" -o -z "$dest_lv" ] && usage || :
 
 from_lodev=`attache_lodev $from_lv`
 add_partition_mappings $from_lodev
