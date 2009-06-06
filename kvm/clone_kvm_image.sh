@@ -1,4 +1,12 @@
 #!/bin/sh
+#
+# please specify following variables in config file.
+#
+# from_lv=/dev/mapper/vgname-from_lvname
+# dest_lv=/dev/mapper/vgname-dest_lvname
+# working_mount_point=/mnt
+# hostname=guest.hostname
+# ip_address=192.168.1.23
 
 errx ()
 {
@@ -147,15 +155,97 @@ clone_kvm_disk ()
     delete_partition_mappings $dest_lodev
 }
 
-usage ()
+mount_filesystem ()
 {
-    errx 1 usage: $0 from_lv dest_lv
+    partition_device=$1
+    mount_point=$2
+    if [ -z $partition_device ]; then
+        errx 1 "partition_device does not specified."
+    fi
+    if [ -z $mount_point ]; then
+        errx 1 "mount_point does not specified."
+    fi
+    exec_command mount $partition_device $mount_point
 }
 
-from_lv=$1
-dest_lv=$2
+umount_filesystem ()
+{
+    mount_point=$1
+    if [ -z $mount_point ]; then
+        errx 1 "mount_point does not specified."
+    fi
+    exec_command umount $mount_point
+}
 
-[ -z "$from_lv" -o -z "$dest_lv" ] && usage || :
+set_hostname ()
+{
+    mount_point=$1
+    hostname=$2
+    if [ -z $mount_point ]; then
+        errx 1 "mount_point does not specified."
+    fi
+    if [ -z $hostname ]; then
+        errx 1 "hostname does not specified."
+    fi
+    echo $hostname > $mount_point/etc/hostname
+}
+
+set_network_interface_info ()
+{
+    mount_point=$1
+    ip_address=$2
+    if [ -z $mount_point ]; then
+        errx 1 "mount_point does not specified."
+    fi
+    if [ -z $ip_address ]; then
+        errx 1 "ip_address does not specified."
+    fi
+    ed $mount_point/etc/network/interfaces <<EOF
+/iface eth0 inet static/
++1
+s/^.*$/        address $ip_address/
+w
+q
+EOF
+}
+
+copy_resolv_conf ()
+{
+    mount_point=$1
+    if [ -z $mount_point ]; then
+        errx 1 "mount_point does not specified."
+    fi
+    cp /etc/resolv.conf $mount_point/etc/
+}
+
+set_postfix_conf ()
+{
+    mount_point=$1
+    hostname=$2
+    if [ -z $mount_point ]; then
+        errx 1 "mount_point does not specified."
+    fi
+    if [ -z $hostname ]; then
+        errx 1 "hostname does not specified."
+    fi
+    cp /etc/postfix/main.cf $mount_point/etc/postfix/
+    ed $mount_point/etc/postfix/main.cf <<EOF
+/^myhostname = /
+s/^.*$/myhostname = $hostname/
+w
+q
+EOF
+}
+
+usage ()
+{
+    errx 1 usage: $0 conf_file
+}
+
+conf_file=$1
+[ -z "$conf_file" ] && usage || :
+[ ! -e "$conf_file" ] && errx 1 "$conf_file does not exists." || :
+. $conf_file
 
 from_lodev=`attache_lodev $from_lv`
 add_partition_mappings $from_lodev
@@ -164,7 +254,16 @@ shrink_filesystem $partition_device
 blocks_to_dd=`calc_blocks_to_dd $partition_device`
 dest_lodev=`attache_lodev $dest_lv`
 clone_kvm_disk $from_lodev $dest_lodev $blocks_to_dd
+add_partition_mappings $dest_lodev
+mount_filesystem `detect_partition_device $dest_lodev` $working_mount_point
+set_hostname $working_mount_point $hostname
+copy_resolv_conf $working_mount_point
+set_network_interface_info $working_mount_point $ip_address
+set_postfix_conf $working_mount_point $hostname
+umount_filesystem $working_mount_point
+delete_partition_mappings $dest_lodev
 detach_lodev $dest_lodev
 restore_filesystem `detect_partition_device $from_lodev`
 delete_partition_mappings $from_lodev
 detach_lodev $from_lodev
+
