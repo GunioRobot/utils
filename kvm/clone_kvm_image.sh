@@ -7,6 +7,12 @@
 # working_mount_point=/mnt
 # hostname=guest.hostname
 # ip_address=192.168.1.23
+#
+# from_lv=/dev/mapper/vgname-from_lvname
+# dest_lv=dest_host:/dev/mapper/vgname-dest_lvname
+# working_mount_point=/mnt
+# hostname=guest.hostname
+# ip_address=192.168.1.23
 
 errx ()
 {
@@ -237,33 +243,73 @@ q
 EOF
 }
 
-usage ()
+clone_vm_image ()
 {
-    errx 1 usage: $0 conf_file
+    from_lv=$1
+    dest_lv=$2
+    if [ -z $from_lv ]; then
+        errx 1 "from_lv does not specified."
+    fi
+    if [ -z $from_lv ]; then
+        errx 1 "dest_lv does not specified."
+    fi
+    from_lodev=`attache_lodev $from_lv`
+    add_partition_mappings $from_lodev
+    partition_device=`detect_partition_device $from_lodev`
+    shrink_filesystem $partition_device
+    blocks_to_dd=`calc_blocks_to_dd $partition_device`
+    dest_lodev=`attache_lodev $dest_lv`
+    clone_kvm_disk $from_lodev $dest_lodev $blocks_to_dd
+    detach_lodev $dest_lodev
+    restore_filesystem `detect_partition_device $from_lodev`
+    delete_partition_mappings $from_lodev
+    detach_lodev $from_lodev
 }
 
-conf_file=$1
-[ -z "$conf_file" ] && usage || :
-[ ! -e "$conf_file" ] && errx 1 "$conf_file does not exists." || :
-. $conf_file
+configure_vm_image ()
+{
+    lv=$1
+    working_mount_point=$2
+    hostname=$3
+    ip_address=$4
+    if [ -z $lv ]; then
+        errx 1 "logical volume does not specified."
+    fi
+    if [ -z $working_mount_point ]; then
+        errx 1 "working_mount_point does not specified."
+    fi
+    if [ -z $hostname ]; then
+        errx 1 "hostname does not specified."
+    fi
+    if [ -z $ip_address ]; then
+        errx 1 "ip_address does not specified."
+    fi
+    # TODO: prams check
+    lodev=`attache_lodev $lv`
+    add_partition_mappings $lodev
+    mount_filesystem `detect_partition_device $lodev` $working_mount_point
+    set_hostname $working_mount_point $hostname
+    copy_resolv_conf $working_mount_point
+    set_network_interface_info $working_mount_point $ip_address
+    set_postfix_conf $working_mount_point $hostname
+    umount_filesystem $working_mount_point
+    delete_partition_mappings $lodev
+}
 
-from_lodev=`attache_lodev $from_lv`
-add_partition_mappings $from_lodev
-partition_device=`detect_partition_device $from_lodev`
-shrink_filesystem $partition_device
-blocks_to_dd=`calc_blocks_to_dd $partition_device`
-dest_lodev=`attache_lodev $dest_lv`
-clone_kvm_disk $from_lodev $dest_lodev $blocks_to_dd
-add_partition_mappings $dest_lodev
-mount_filesystem `detect_partition_device $dest_lodev` $working_mount_point
-set_hostname $working_mount_point $hostname
-copy_resolv_conf $working_mount_point
-set_network_interface_info $working_mount_point $ip_address
-set_postfix_conf $working_mount_point $hostname
-umount_filesystem $working_mount_point
-delete_partition_mappings $dest_lodev
-detach_lodev $dest_lodev
-restore_filesystem `detect_partition_device $from_lodev`
-delete_partition_mappings $from_lodev
-detach_lodev $from_lodev
+usage ()
+{
+    errx 1 usage: $0 config_file
+}
+
+config_file=$1
+[ -z "$config_file" ] && usage || :
+[ ! -e "$config_file" ] && errx 1 "$config_file does not exists." || :
+. $config_file
+
+prog_name=`basename $0`
+if [ "$prog_name" = "clone_vm_image" ]; then
+    clone_vm_image $from_lv $dest_lv
+elif [ "$prog_name" = "configure_vm_image" ]; then
+    configure_vm_image $dest_lv $working_mount_point $hostname $ip_address
+fi
 
