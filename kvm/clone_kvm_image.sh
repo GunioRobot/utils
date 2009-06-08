@@ -294,6 +294,7 @@ configure_vm_image ()
     set_postfix_conf $working_mount_point $hostname
     umount_filesystem $working_mount_point
     delete_partition_mappings $lodev
+    detach_lodev $lodev
 }
 
 usage ()
