@@ -1,18 +1,4 @@
 #!/bin/sh
-#
-# please specify following variables in config file.
-#
-# from_lv=/dev/mapper/vgname-from_lvname
-# dest_lv=/dev/mapper/vgname-dest_lvname
-# working_mount_point=/mnt
-# hostname=guest.hostname
-# ip_address=192.168.1.23
-#
-# from_lv=/dev/mapper/vgname-from_lvname
-# dest_lv=dest_host:/dev/mapper/vgname-dest_lvname
-# working_mount_point=/mnt
-# hostname=guest.hostname
-# ip_address=192.168.1.23
 
 prog_name='kvm_disk_util'
 
@@ -208,7 +194,7 @@ set_hostname ()
     if [ -z $hostname ]; then
         errx 1 "hostname does not specified."
     fi
-    echo $hostname > $mount_point/etc/hostname
+    sudo sh -c "echo $hostname > $mount_point/etc/hostname"
 }
 
 set_network_interface_info ()
@@ -221,7 +207,7 @@ set_network_interface_info ()
     if [ -z $ip_address ]; then
         errx 1 "ip_address does not specified."
     fi
-    ed $mount_point/etc/network/interfaces <<EOF
+    sudo ed $mount_point/etc/network/interfaces <<EOF
 /iface eth0 inet static/
 +1
 s/^.*$/        address $ip_address/
@@ -236,7 +222,7 @@ copy_resolv_conf ()
     if [ -z $mount_point ]; then
         errx 1 "mount_point does not specified."
     fi
-    cp /etc/resolv.conf $mount_point/etc/
+    exec_command sudo cp /etc/resolv.conf $mount_point/etc/
 }
 
 set_postfix_conf ()
@@ -249,8 +235,8 @@ set_postfix_conf ()
     if [ -z $hostname ]; then
         errx 1 "hostname does not specified."
     fi
-    cp /etc/postfix/main.cf $mount_point/etc/postfix/
-    ed $mount_point/etc/postfix/main.cf <<EOF
+    exec_command sudo cp /etc/postfix/main.cf $mount_point/etc/postfix/
+    sudo ed $mount_point/etc/postfix/main.cf <<EOF
 /^myhostname = /
 s/^.*$/myhostname = $hostname/
 w
@@ -284,20 +270,22 @@ clone ()
 remote_clone ()
 {
     source_logical_volume=$1
-    destination=$2
+    remote_hostname=$2
+    remote_logical_volume=$3
     if [ -z $source_logical_volume ]; then
         errx 1 "source_logical_volume does not specified."
     fi
-    if [ -z $destination ]; then
-        errx 1 "destination does not specified."
+    if [ -z $remote_hostname ]; then
+        errx 1 "remote_hostname does not specified."
+    fi
+    if [ -z $remote_logical_volume ]; then
+        errx 1 "remote_logical_volume does not specified."
     fi
     source_loopback_device=`attache_lodev $source_logical_volume`
     add_partition_mappings $source_loopback_device
     partition_device=`detect_partition_device $source_loopback_device`
     shrink_filesystem $partition_device
     blocks_to_dd=`calc_blocks_to_dd $partition_device`
-    remote_hostname=`echo $destination | sed -e 's/\([^:]*\):.*/\1/g'`
-    remote_logical_volume=`echo $destination | sed -e 's/.*:\([^:]*\)/\1/g'`
     remote_loopback_device=`ssh $remote_hostname $prog_name attache_lodev $remote_logical_volume`
     clone_disk_via_network $source_loopback_device $blocks_to_dd $remote_hostname $remote_loopback_device
     exec_command ssh $remote_hostname $prog_name detach_lodev $remote_loopback_device
@@ -306,17 +294,14 @@ remote_clone ()
     detach_lodev $source_loopback_device
 }
 
-configure_vm_image ()
+configure ()
 {
-    lv=$1
-    working_mount_point=$2
-    hostname=$3
-    ip_address=$4
-    if [ -z $lv ]; then
+    logical_volume=$1
+    hostname=$2
+    ip_address=$3
+    working_mount_point=$4
+    if [ -z $logical_volume ]; then
         errx 1 "logical volume does not specified."
-    fi
-    if [ -z $working_mount_point ]; then
-        errx 1 "working_mount_point does not specified."
     fi
     if [ -z $hostname ]; then
         errx 1 "hostname does not specified."
@@ -324,8 +309,11 @@ configure_vm_image ()
     if [ -z $ip_address ]; then
         errx 1 "ip_address does not specified."
     fi
+    if [ -z $working_mount_point ]; then
+        working_mount_point=/mnt
+    fi
     # TODO: prams check
-    lodev=`attache_lodev $lv`
+    lodev=`attache_lodev $logical_volume`
     add_partition_mappings $lodev
     mount_filesystem `detect_partition_device $lodev` $working_mount_point
     set_hostname $working_mount_point $hostname
@@ -339,20 +327,20 @@ configure_vm_image ()
 
 usage ()
 {
-    errx 1 usage: $0 config_file
+    errx 1 usage: $prog_name [command] [options]
 }
 
-args=`getopt -o s:t:h:i: --long source:,target:,hostname:,ip-address: -n $prog_name -- "$@"`
+args=`getopt -o h:i: --long hostname:,ipaddress: -n $prog_name -- "$@"`
 if [ $? != 0 ]; then echo "Terminationg...">&2 ; exit 1 ; fi
 eval set -- "$args"
 
 while true ; do
     case "$1" in
-        --source)
-            source_logical_volume=$2
+        --hostname)
+            hostname=$2
             shift 2;;
-        --target)
-            target_logical_volume=$2
+        --ipaddress)
+            ipaddress=$2
             shift 2;;
         --) shift; break ;;
         *) usage;
@@ -379,12 +367,20 @@ case "$1" in
         restore_filesystem $2
         break ;;
     clone)
+        source_logical_volume=$2
+        target_logical_volume=$3
         clone $source_logical_volume $target_logical_volume
         break;;
     remote_clone)
-        remote_clone $source_logical_volume $target_logical_volume
+        source_logical_volume=$2
+        remote_hostname=`echo $3 | sed -e 's/\([^:]*\):.*/\1/g'`
+        remote_logical_volume=`echo $3 | sed -e 's/.*:\([^:]*\)/\1/g'`
+        remote_clone $source_logical_volume $remote_hostname $remote_logical_volume
         break;;
-    *)
-        usage
+    configure)
+        logical_volume=$2
+        configure $2 $hostname $ipaddress
+        break;;
+    *) usage;
 esac
 
