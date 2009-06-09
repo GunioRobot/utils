@@ -1,12 +1,15 @@
 #!/bin/sh
 
 prog_name='kvm_disk_util'
+attached_lodevs=
+mounted_devices=
 
 errx ()
 {
     r=$1
     shift
     echo "$@" 1>&2
+    detach_all_lodevs
     exit $r
 }
 
@@ -69,6 +72,7 @@ add_partition_mappings ()
         errx 1 "specified loopback device does not exist."
     fi
     exec_command sudo kpartx -a $lodev
+    attached_lodevs="$attached_lodevs $lodev"
 }
 
 delete_partition_mappings ()
@@ -93,6 +97,17 @@ delete_partition_mappings ()
     if [ $try = $max_try ]; then
         errx 1 kpartx -d $lodev failed.
     fi
+}
+
+detach_all_lodevs ()
+{
+    for dev in $mounted_devices; do
+        umount_filesystem $dev
+    done
+    for lodev in $attached_lodevs; do
+        delete_partition_mappings $lodev
+        detach_lodev $lodev
+    done
 }
 
 detect_partition_device ()
@@ -173,6 +188,7 @@ mount_filesystem ()
         errx 1 "mount_point does not specified."
     fi
     exec_command sudo mount $partition_device $mount_point
+    mounted_devices="$mounted_devices $partition_device"
 }
 
 umount_filesystem ()
