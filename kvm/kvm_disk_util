@@ -327,7 +327,18 @@ configure ()
 
 usage ()
 {
-    errx 1 usage: $prog_name [command] [options]
+    echo usage: $prog_name [command] [options]
+    echo 
+    echo kvm_disk_util commands are below:
+    echo "    attache_lodev [logical volume path]"
+    echo "    detach_lodev [loopback device]"
+    echo "    add_partition_mappings [loopback device]"
+    echo "    delete_partition_mappings [loopback device]"
+    echo "    detect_partition_device [loopback device]"
+    echo "    restore_filesystem [partition device]"
+    echo "    clone [source logical volume path] [dest logical volume path]"
+    echo "    configure [--hostname hostname] [--ipaddress ipaddress] [logical volume path]"
+    exit 1
 }
 
 args=`getopt -o h:i: --long hostname:,ipaddress: -n $prog_name -- "$@"`
@@ -367,15 +378,16 @@ case "$1" in
         restore_filesystem $2
         break ;;
     clone)
-        source_logical_volume=$2
-        target_logical_volume=$3
-        clone $source_logical_volume $target_logical_volume
-        break;;
-    remote_clone)
-        source_logical_volume=$2
-        remote_hostname=`echo $3 | sed -e 's/\([^:]*\):.*/\1/g'`
-        remote_logical_volume=`echo $3 | sed -e 's/.*:\([^:]*\)/\1/g'`
-        remote_clone $source_logical_volume $remote_hostname $remote_logical_volume
+        if [ `echo $3 | grep ':' | wc -l` = 1 ]; then
+            source_logical_volume=$2
+            remote_hostname=`echo $3 | sed -e 's/\([^:]*\):.*/\1/g'`
+            remote_logical_volume=`echo $3 | sed -e 's/.*:\([^:]*\)/\1/g'`
+            remote_clone $source_logical_volume $remote_hostname $remote_logical_volume
+        else
+            source_logical_volume=$2
+            target_logical_volume=$3
+            clone $source_logical_volume $target_logical_volume
+        fi
         break;;
     configure)
         logical_volume=$2
