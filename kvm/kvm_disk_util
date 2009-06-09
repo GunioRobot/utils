@@ -163,6 +163,19 @@ clone_kvm_disk ()
     delete_partition_mappings $dest_lodev
 }
 
+clone_disk_via_network ()
+{
+    source_lodev=$1
+    blocks_to_dd=$2
+    dest_hostname=$3
+    dest_lodev=$4
+    exec_command sudo dd if=$source_lodev bs=1M count=$blocks_to_dd | ssh $dest_hostname sudo dd of=$dest_lodev bs=1M
+    exec_command ssh $dest_hostname sudo $prog_name add_partition_mappings $dest_lodev
+    partition_device=`ssh $dest_hostname sudo $prog_name detect_partition_device $dest_lodev`
+    exec_command ssh $dest_hostname sudo $prog_name restore_filesystem $partition_device
+    exec_command ssh $dest_hostname sudo $prog_name delete_partition_mappings $dest_lodev
+}
+
 mount_filesystem ()
 {
     partition_device=$1
@@ -285,9 +298,9 @@ remote_clone ()
     blocks_to_dd=`calc_blocks_to_dd $partition_device`
     remote_hostname=`echo $destination | sed -e 's/\([^:]*\):.*/\1/g'`
     remote_logical_volume=`echo $destination | sed -e 's/.*:\([^:]*\)/\1/g'`
-    target_loopback_device=`ssh $remote_hostname $prog_name attache_lodev $remote_logical_volume`
-    clone_disk_via_network 
-    ssh $remote_hostname $prog_name detach_lodev $target_loopback_device
+    remote_loopback_device=`ssh $remote_hostname $prog_name attache_lodev $remote_logical_volume`
+    clone_disk_via_network $source_loopback_device $blocks_to_dd $remote_hostname $remote_loopback_device
+    exec_command ssh $remote_hostname $prog_name detach_lodev $remote_loopback_device
     restore_filesystem `detect_partition_device $source_loopback_device`
     delete_partition_mappings $source_loopback_device
     detach_lodev $source_loopback_device
@@ -348,12 +361,22 @@ done
 
 case "$1" in
     attache_lodev)
-        lv=$2
-        attache_lodev $lv
+        attache_lodev $2
         break ;;
     detach_lodev)
-        lodev=$2
-        detach_lodev $lodev
+        detach_lodev $2
+        break ;;
+    add_partition_mappings)
+        add_partition_mappings $2
+        break ;;
+    delete_partition_mappings)
+        delete_partition_mappings $2
+        break ;;
+    detect_partition_device)
+        detect_partition_device $2
+        break ;;
+    restore_filesystem)
+        restore_filesystem $2
         break ;;
     clone)
         clone $source_logical_volume $target_logical_volume
