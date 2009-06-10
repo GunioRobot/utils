@@ -128,6 +128,7 @@ shrink_filesystem ()
     fi
     exec_command sudo e2fsck -p -f $partition_device >/dev/null
     exec_command sudo resize2fs -M $partition_device >/dev/null
+    sleep 1
     exec_command sudo e2fsck -p -f $partition_device >/dev/null
 }
 
@@ -139,6 +140,7 @@ restore_filesystem ()
     fi
     exec_command sudo e2fsck -p -f $partition_device >/dev/null
     exec_command sudo resize2fs $partition_device >/dev/null
+    sleep 1
     exec_command sudo e2fsck -p -f $partition_device >/dev/null
 }
 
