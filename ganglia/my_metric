@@ -1,0 +1,15 @@
+#!/bin/sh
+
+disk_free ()
+{
+    part=$1
+    pattern="$part\$"
+    disk_free_byte=`df | grep $pattern | awk '{print $4}'`
+    perl -e "printf '%.2f', $disk_free_byte / 1024 / 1024"
+}
+
+root_disk_free=`disk_free /`
+gmetric --name=root_disk_free --value=$root_disk_free --type=double --unit=GB
+
+home_disk_free=`disk_free /home`
+gmetric --name=home_disk_free --value=$home_disk_free --type=double --unit=GB
