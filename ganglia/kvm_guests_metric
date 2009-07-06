@@ -1,0 +1,19 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+my @vm;
+my $cmd = "virsh list --all";
+open my $list, '-|', $cmd or die "'$cmd' exec failed: $!";
+while (<$list>) {
+    if (/([^\s]+?)\s+([^\s]+?)\s+([^\s]*)/) {
+        my ($id, $name) = ($1, $2);
+        next if $id eq 'Id';
+        push @vm, "$id:$name";
+    }
+}
+close $list;
+my $kvm_guests = join ",", @vm;
+my @cmd = ('gmetric', '--name=kvm_guests', "--value=$kvm_guests", '--type=string');
+system(@cmd) == 0 or die $!;
