@@ -138,7 +138,9 @@ restore_filesystem ()
     if [ -z $partition_device ]; then
         errx 1 "partition_device does not specified."
     fi
+    sleep 1
     exec_command sudo e2fsck -p -f $partition_device >/dev/null
+    sleep 1
     exec_command sudo resize2fs $partition_device >/dev/null
     sleep 1
     exec_command sudo e2fsck -p -f $partition_device >/dev/null
