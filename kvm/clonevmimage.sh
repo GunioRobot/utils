@@ -1,9 +1,22 @@
 #!/bin/sh
 
+usage ()
+{
+    echo "usage: clonevmimage src_logical_volume dst_logical_volume"
+    exit 1
+}
+
 associated_lodevs=
 add_associated_lodev ()
 {
     associated_lodevs="$associated_lodevs $1"
+}
+
+release_all_associated_lodevs ()
+{
+    for lodev in $associated_lodevs; do
+        losetup -d $lodev
+    done
 }
 
 mapped_lodevs=
@@ -16,13 +29,6 @@ release_all_mapped_lodevs ()
 {
     for lodev in $mapped_lodevs; do
         kpartx -d $lodev
-    done
-}
-
-release_all_associated_lodevs ()
-{
-    for lodev in $associated_lodevs; do
-        losetup -d $lodev
     done
 }
 
@@ -49,12 +55,6 @@ exec_cmd ()
     if [ $retval != "0" ]; then
         errx $retval $@ exit with code $retval
     fi
-}
-
-usage ()
-{
-    echo "usage: clonevmimage src_logical_volume dst_logical_volume"
-    exit 1
 }
 
 detect_lodev ()
@@ -122,12 +122,6 @@ dstlv=$2
 
 if [ -z $srclv -o -z $dstlv ]; then
     usage
-fi
-if [ ! -b $srclv ]; then
-    errx 1 "$srclv is not block device."
-fi
-if [ ! -b $dstlv ]; then
-    errx 1 "$dstlv is not block device."
 fi
 
 associate_lodev $srclv
