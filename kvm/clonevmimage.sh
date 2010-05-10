@@ -1,5 +1,7 @@
 #!/bin/sh
 
+PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+
 usage ()
 {
     echo "usage: clonevmimage src_logical_volume dst_logical_volume"
