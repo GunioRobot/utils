@@ -49,7 +49,7 @@ create_user_account ()
     shadow=`cat $shadow_file`
     [ -z "$shadow" ] && errx 1 "shadow is empty." || exec_command rm $shadow_file
     exec_command groupadd -g $gid $user_name
-    exec_command useradd -u $uid -g $gid $user_name 
+    exec_command useradd -u $uid -g $gid $user_name
     ed /etc/shadow <<EOF
 /^$user_name:/
 d

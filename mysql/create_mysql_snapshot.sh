@@ -16,7 +16,7 @@ warnx ()
 
 errx ()
 {
-    r=$1; shift; echo "$@" 1>&2; exit $r 
+    r=$1; shift; echo "$@" 1>&2; exit $r
 }
 
 exec_cmd ()

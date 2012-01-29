@@ -348,7 +348,7 @@ configure ()
 usage ()
 {
     echo usage: $prog_name [command] [options]
-    echo 
+    echo
     echo kvm_disk_util commands are below:
     echo "    attache_lodev [logical volume path]"
     echo "    detach_lodev [loopback device]"
